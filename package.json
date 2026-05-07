@@ -1,0 +1,14 @@
+{
+  "name": "intent-inference",
+  "version": "0.1.0",
+  "description": "Reverse-engineers user intent from behavior signals and tells the fleet what to work on",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
