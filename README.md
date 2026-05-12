@@ -1,27 +1,89 @@
 # intent-inference
 
-**Reverse-engineers productive lane from agent behavior.**
+[![CI](https://github.com/SuperInstance/intent-inference/actions/workflows/ci.yml/badge.svg)](https://github.com/SuperInstance/intent-inference/actions/workflows/ci.yml)
 
-Part of the reverse-actualization pipeline. When an agent works, something went right. This repo figures out what, and how to repeat it.
+**Infers user intent from navigation, murmur, PLATO, and deliberation signals.**
+
+While [constraint-inference](https://github.com/SuperInstance/constraint-inference) learns constraint boundaries from user overrides, this service learns what the user is *trying to do* from their behavior patterns.
 
 ## What It Does
 
-Monitors agent behavior across the Cocapn Fleet and infers the *intent* behind successful actions. Not motivation — structure. Given a sequence of actions that produced a verified output, what constraints were implicitly satisfied? What lock algebra patterns emerged?
+The intent inference engine observes multiple signal sources and maintains a **productive lane** — a model of the user's current goals, priorities, and confidence levels.
 
-## Why It Matters
+```
+Navigation → Where are they clicking/visiting?
+Murmur     → What are they saying in fleet chat?
+PLATO      → What rooms are they reading/writing?
+Deliberation → What decisions are they participating in?
+     ↓
+  Productive Lane
+  - primary_goals: [...]
+  - confidence: 0.87
+  - evidence: [...]
+     ↓
+  Fleet Bridge → tell agents what to work on
+```
 
-You can't improve what you don't measure. Intent inference closes the loop: agents act → fleet observes → intents are extracted → protocol improves → agents act better.
+## Architecture
 
-## The Core Idea
+```
+src/
+├── observers/
+│   ├── navigation_observer.ts    — Tracks page/room visits
+│   ├── murmur_observer.ts        — Monitors fleet chat signals
+│   ├── plato_observer.ts         — Tracks PLATO room activity
+│   └── deliberation_observer.ts  — Tracks decision participation
+├── models/
+│   ├── productive_lane.ts        — Goal/confidence/evidence model
+│   └── intent_signal.ts          — Signal type + strength
+├── inferrer.ts                   — Core inference engine
+├── fleet_bridge.ts               — Push goals to fleet agents
+├── storage.ts                    — Persist lane state
+└── index.ts                      — Main loop (1-minute poll)
+```
 
-Every successful action is a constraint that was satisfied. Intent inference makes those constraints explicit so the fleet can compile them.
+### Productive Lane
 
-## Fleet Context
+The core data structure — a living model of what the user cares about right now:
 
-- **Upstream**: [flux-research](https://github.com/SuperInstance/flux-research) — lock algebra and constraint theory
-- **Downstream**: [purplepincher](https://github.com/SuperInstance/purplepincher) — PLATO tile compilation
-- **Parent**: [forgemaster](https://github.com/SuperInstance/forgemaster)
+```typescript
+{
+  confidence: 0.87,
+  primary_goals: ["ship dodecet-encoder", "fix fleet services"],
+  evidence: [
+    { signal: "navigation", strength: 0.9, topic: "dodecet-encoder", ts: "..." },
+    { signal: "murmur", strength: 0.7, topic: "fleet services down", ts: "..." },
+    // ...last 100 signals
+  ]
+}
+```
 
-## Status
+### Fleet Bridge
 
-Active research. Contributions welcome — open an issue with a behavior trace.
+When the lane updates, the fleet bridge tells agents what to prioritize. This is how the fleet knows what the human wants without being asked explicitly.
+
+## Why This Matters
+
+The fleet has 9 agents. Without intent inference, they'd all do what they think is best. With intent inference, they align around what the human actually cares about *right now*.
+
+This is **anticipatory alignment** — the fleet starts working on what you need before you ask.
+
+## Usage
+
+```bash
+npm install
+npm start
+```
+
+Polls every 60 seconds. Merges new signals into the lane. Pushes updates to fleet.
+
+## Ecosystem
+
+- **constraint-inference** — Complementary: learns constraints from overrides
+- **flux-lucid** — Intent vectors and navigation metaphors
+- **fleet-murmur** — Signal source (fleet chat)
+- **dodecet-encoder** — Consumer: lighthouse uses intent for task routing
+
+## License
+
+MIT
