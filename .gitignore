@@ -1,6 +1,9 @@
-node_modules/
+target/
 __pycache__/
 *.pyc
+dist/
+*.egg-info/
+.env
 .DS_Store
-*.bak
-*.orig
+node_modules/
+*.wasm
