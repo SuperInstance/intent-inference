@@ -1,6 +1,6 @@
 {
   "name": "intent-inference",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reverse-engineers user intent from behavior signals and tells the fleet what to work on",
   "main": "src/index.ts",
   "scripts": {

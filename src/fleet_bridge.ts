@@ -125,4 +125,78 @@ export class FleetBridge {
       console.error(`[FleetBridge] Error posting briefing: ${error}`);
     }
   }
+
+  /**
+   * Simulation-first: predict goal engagement before broadcasting.
+   */
+  async predictGoalEngagement(goal: IntentGoal, lane: ProductiveLane): Promise<{
+    predicted: boolean;
+    expected_engagement: number;
+    lamport: number;
+  }> {
+    const lamport = Date.now();
+    const expected_engagement = Math.min(goal.engagement_score * 1.1, 1.0);
+
+    try {
+      const prediction = {
+        domain: 'intent_predictions',
+        question: `predict:goal:${goal.goal} expected_engagement:${expected_engagement.toFixed(2)}`,
+        answer: JSON.stringify({
+          goal: goal.goal,
+          predicted_engagement: expected_engagement,
+          supporting_signals: goal.supporting_signals,
+          confidence: lane.confidence,
+          lamport,
+          t_minus_event: `T-5m: monitoring engagement for ${goal.goal}`,
+        }),
+        confidence: lane.confidence,
+        source: 'intent-inference-v2',
+      };
+
+      await fetch(`${PLATO_API}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: 'intent_predictions', ...prediction }),
+      });
+    } catch (error) {
+      console.error(`[FleetBridge] Error writing prediction: ${error}`);
+    }
+
+    return { predicted: expected_engagement > 0.5, expected_engagement, lamport };
+  }
+
+  /**
+   * Confirm a goal prediction against actual engagement data.
+   */
+  async confirmGoalPrediction(
+    lamport: number,
+    predictedEngagement: number,
+    actualEngagement: number,
+  ): Promise<boolean> {
+    const accurate = Math.abs(predictedEngagement - actualEngagement) < 0.15;
+
+    if (!accurate) {
+      try {
+        await fetch(`${PLATO_API}/supersede`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room: 'intent_predictions',
+            old_lamport: lamport,
+            new_tile: {
+              domain: 'intent_predictions',
+              question: `corrected:engagement:${actualEngagement.toFixed(2)}`,
+              answer: JSON.stringify({ actual_engagement: actualEngagement, corrected: true }),
+              confidence: 0.9,
+              source: 'intent-inference-v2',
+            },
+          }),
+        });
+      } catch (error) {
+        console.error(`[FleetBridge] Error superseding prediction: ${error}`);
+      }
+    }
+
+    return accurate;
+  }
 }
